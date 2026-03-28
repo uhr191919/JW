@@ -12,13 +12,15 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12' # 더 안정적인 최신 버전으로 상향
+          python-version: '3.12' # 최신 표준 버전 사용
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip cache purge
-          # 명시적으로 필요한 라이브러리만 설치합니다.
-          pip install google-genai youtube-transcript-api google-api-python-client
+          # 라이브러리를 하나씩 명시적으로, 최신 버전으로 강제 설치합니다.
+          pip install --force-reinstall google-genai
+          pip install --force-reinstall youtube-transcript-api
+          pip install --force-reinstall google-api-python-client
       - name: Run script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
