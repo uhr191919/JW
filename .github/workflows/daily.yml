@@ -9,16 +9,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-
+          python-version: '3.11' # 최신 버전에 맞춰 상향
       - name: Install dependencies
         run: |
-          pip install google-generativeai youtube-transcript-api
-
+          pip install google-genai youtube-transcript-api google-api-python-client
       - name: Run script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
