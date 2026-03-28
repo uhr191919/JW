@@ -3,62 +3,72 @@ from googleapiclient.discovery import build
 from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 
-# 1. 설정값
+# 설정값 가져오기
 GEMINI_KEY = os.environ["GEMINI_API_KEY"]
 YOUTUBE_KEY = os.environ["YOUTUBE_API_KEY"]
 BLOOMBERG_CHANNEL_ID = "UCIALMKvObZNtJ6AmdCLP7Lg"
 
 client = genai.Client(api_key=GEMINI_KEY)
 
-def get_latest_videos(channel_id):
-    """검색 범위를 15개로 늘립니다."""
+def get_latest_video_details(channel_id):
+    # 영상 제목과 상태를 알기 위해 snippet 정보를 추가로 요청합니다.
     youtube = build('youtube', 'v3', developerKey=YOUTUBE_KEY)
     request = youtube.search().list(
-        part="id",
+        part="id,snippet",
         channelId=channel_id,
         order="date",
-        maxResults=15, # 5개에서 15개로 확장
+        maxResults=20,
         type="video"
     )
     response = request.execute()
-    return [item['id']['videoId'] for item in response['items']]
+    return response['items']
 
 def get_summary_safe():
-    video_ids = get_latest_videos(BLOOMBERG_CHANNEL_ID)
-    print(f"총 {len(video_ids)}개의 영상을 검사합니다...")
+    items = get_latest_video_details(BLOOMBERG_CHANNEL_ID)
+    print(f"총 {len(items)}개의 최신 영상을 정밀 검사합니다.")
     
-    for video_id in video_ids:
+    for item in items:
+        video_id = item['id']['videoId']
+        title = item['snippet']['title']
+        live_status = item['snippet'].get('liveBroadcastContent', 'none')
+        
+        print(f"\n검사 중: {title} ({video_id})")
+        
+        if live_status == 'live':
+            print("상태: 현재 생중계 중인 영상은 자막을 가져올 수 없습니다.")
+            continue
+            
         try:
-            # 수동 자막뿐만 아니라 자동 생성된 자막까지 모두 검색합니다.
             transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
             
-            # 영어 자막(en)을 먼저 찾고, 없으면 영어 계열 자막을 아무거나 가져옵니다.
+            # 수동 자막(en) 우선 검색 후 자동 자막 검색
             try:
                 transcript = transcript_list.find_manual_transcript(['en'])
+                print("상태: 수동 작성 자막 발견")
             except:
                 transcript = transcript_list.find_generated_transcript(['en'])
+                print("상태: 자동 생성 자막 발견")
                 
             data = transcript.fetch()
             full_text = " ".join([t['text'] for t in data])
             
-            # 요약 실행
+            # 제미나이 요약
             response = client.models.generate_content(
                 model="gemini-2.0-flash",
-                contents=f"다음 블룸버그 뉴스 내용을 바탕으로 주요 경제 지표와 이슈를 한국어로 요약해줘:\n\n{full_text}"
+                contents=f"다음 뉴스 내용을 바탕으로 경제 핵심 이슈를 한국어로 요약해줘:\n\n{full_text}"
             )
             
-            print("=" * 30)
-            print(f"브리핑 성공! 영상 ID: {video_id}")
-            print(f"영상 주소: https://youtu.be/{video_id}")
-            print("=" * 30)
+            print("-" * 30)
+            print("요약 성공!")
+            print("-" * 30)
             print(response.text)
             return
             
-        except Exception:
-            # 로그를 간결하게 하기 위해 조용히 다음 영상으로 넘어갑니다.
+        except Exception as e:
+            print(f"상태: 자막 추출 불가 ({str(e)})")
             continue
             
-    print("현재 자막이 준비된 최신 영상이 없습니다. 잠시 후 다시 시도해 주세요.")
+    print("\n결과: 자막이 준비된 일반 업로드 영상을 찾지 못했습니다.")
 
 if __name__ == "__main__":
     get_summary_safe()
