@@ -1,22 +1,18 @@
-name: Daily News Summary
-on:
-schedule:
-- cron: '0 10 * * *' # UTC 기준 10시는 한국 시간 저녁 7시입니다
-workflow_dispatch:
+import os
+import google.generativeai as genai
+from youtube_transcript_api import YouTubeTranscriptApi
 
-jobs:
-build:
-runs-on: ubuntu-latest
-steps:
-- uses: actions/checkout@v3
-- name: Set up Python
-uses: actions/setup-python@v4
-with:
-python-version: '3.9'
-- name: Install dependencies
-run: pip install google-generativeai youtube-transcript-api
-- name: Run script
-env:
-GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-run: python main.py
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+model = genai.GenerativeModel('gemini-1.5-flash')
+
+def get_summary(video_id):
+try:
+transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+text = " ".join([t['text'] for t in transcript])
+prompt = f"다음 뉴스 내용을 한국어로 핵심 요약해줘: {text}"
+response = model.generate_content(prompt)
+print(response.text)
+except Exception as e:
+print(f"오류 발생: {e}")
+
+get_summary("w3_07unTOfs")
