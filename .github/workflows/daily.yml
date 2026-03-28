@@ -15,9 +15,9 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          # 라이브러리를 강제로 최신 버전으로 업데이트합니다.
-          pip install --upgrade pip
-          pip install -U google-genai youtube-transcript-api google-api-python-client
+          python -m pip install --upgrade pip
+          # 기존 설치 본을 무시하고 강제로 최신 버전을 설치합니다.
+          pip install -U --force-reinstall google-genai youtube-transcript-api google-api-python-client
       - name: Run script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
