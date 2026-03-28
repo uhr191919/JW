@@ -3,12 +3,10 @@ from googleapiclient.discovery import build
 from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 
-# 1. 신분증 확인
 GEMINI_KEY = os.environ["GEMINI_API_KEY"]
 YOUTUBE_KEY = os.environ["YOUTUBE_API_KEY"]
 BLOOMBERG_CHANNEL_ID = "UCIALMKvObZNtJ6AmdCLP7Lg"
 
-# 2. 제미나이 2026 표준 클라이언트
 client = genai.Client(api_key=GEMINI_KEY)
 
 def get_latest_videos(channel_id):
@@ -17,7 +15,7 @@ def get_latest_videos(channel_id):
         part="id,snippet",
         channelId=channel_id,
         order="date",
-        maxResults=15,
+        maxResults=20,
         type="video"
     )
     response = request.execute()
@@ -25,35 +23,36 @@ def get_latest_videos(channel_id):
 
 def get_summary_safe():
     items = get_latest_videos(BLOOMBERG_CHANNEL_ID)
-    print(f"총 {len(items)}개의 블룸버그 뉴스를 스캔합니다...")
+    print(f"총 {len(items)}개의 블룸버그 영상을 정밀 스캔합니다.")
     
     for item in items:
         video_id = item['id']['videoId']
         title = item['snippet']['title']
+        print(f"\n검사 중: {title} ({video_id})")
         
         try:
-            # 영어 자막(자동 생성 포함)을 가져오는 가장 안정적인 명령어입니다.
-            data = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US'])
+            # 다양한 영어 자막 형식을 시도합니다.
+            data = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US', 'en-GB'])
             full_text = " ".join([t['text'] for t in data])
             
-            # 제미나이에게 요약 요청
             response = client.models.generate_content(
                 model="gemini-2.0-flash",
-                contents=f"다음 블룸버그 뉴스 내용을 바탕으로 경제 핵심 이슈를 한국어로 요약해줘:\n\n{full_text}"
+                contents=f"다음 뉴스 내용을 바탕으로 주요 경제 지표와 이슈를 한국어로 요약해줘:\n\n{full_text}"
             )
             
             print("=" * 35)
             print(f"성공! 요약 영상: {title}")
-            print(f"주소: https://youtu.be/{video_id}")
             print("=" * 35)
             print(response.text)
-            return # 성공 시 종료
+            return
             
-        except Exception:
-            # 자막이 없는 영상(Shorts 등)은 조용히 건너뜁니다.
+        except Exception as e:
+            # 에러 메시지의 앞부분을 출력하여 원인을 파악합니다.
+            error_msg = str(e).split('\n')[0]
+            print(f"-> 건너뜀 사유: {error_msg}")
             continue
             
-    print("현재 요약 가능한 자막이 있는 영상이 없습니다. 잠시 후 시도해 주세요.")
+    print("\n최종 결과: 현재 자막이 준비된 영상을 찾지 못했습니다.")
 
 if __name__ == "__main__":
     get_summary_safe()
