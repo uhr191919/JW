@@ -12,10 +12,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # 최신 버전에 맞춰 상향
+          python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install google-genai youtube-transcript-api google-api-python-client
+          # 라이브러리를 강제로 최신 버전으로 업데이트합니다.
+          pip install --upgrade pip
+          pip install -U google-genai youtube-transcript-api google-api-python-client
       - name: Run script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
