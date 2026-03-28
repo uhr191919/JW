@@ -1,19 +1,19 @@
 import os
 from googleapiclient.discovery import build
 from google import genai
-import youtube_transcript_api
+# 가장 표준적인 방법으로 도구를 꺼내옵니다.
+from youtube_transcript_api import YouTubeTranscriptApi
 
-# 1. 환경 변수 및 채널 설정
+# 1. API 신분증 및 채널 정보
 GEMINI_KEY = os.environ["GEMINI_API_KEY"]
 YOUTUBE_KEY = os.environ["YOUTUBE_API_KEY"]
 BLOOMBERG_CHANNEL_ID = "UCIALMKvObZNtJ6AmdCLP7Lg"
 
-# 2. 제미나이 AI 클라이언트 설정
 client = genai.Client(api_key=GEMINI_KEY)
 
-def get_latest_news_videos(channel_id):
-    # 검색어에 -#shorts를 추가하여 쇼츠 영상을 1차 필터링합니다.
+def get_videos(channel_id):
     youtube = build('youtube', 'v3', developerKey=YOUTUBE_KEY)
+    # 검색 시 쇼츠(-#shorts)와 라이브 영상을 제외하여 수집 확률을 높입니다.
     request = youtube.search().list(
         part="id,snippet",
         channelId=channel_id,
@@ -22,54 +22,56 @@ def get_latest_news_videos(channel_id):
         maxResults=15,
         type="video"
     )
-    response = request.execute()
-    return response.get('items', [])
+    return request.execute().get('items', [])
 
-def process_summary():
-    video_items = get_latest_news_videos(BLOOMBERG_CHANNEL_ID)
-    print(f"분석 시작: {len(video_items)}개의 후보 영상을 정밀 검사합니다.")
+def run():
+    print("--- 시스템 진단 시작 ---")
+    try:
+        # 도구가 정상인지 먼저 확인합니다.
+        test_attr = getattr(YouTubeTranscriptApi, 'get_transcript', None)
+        print(f"도구 확인 결과: {'정상' if test_attr else '비정상(기능 없음)'}")
+    except Exception as e:
+        print(f"진단 중 오류: {e}")
 
-    for item in video_items:
+    items = get_videos(BLOOMBERG_CHANNEL_ID)
+    print(f"\n최근 블룸버그 영상 {len(items)}개를 검사합니다.")
+
+    for item in items:
         video_id = item['id']['videoId']
         title = item['snippet']['title']
         
-        # 제목에 shorts 키워드가 포함된 경우 2차로 제외합니다.
+        # 쇼츠 필터링 (제목 검사)
         if "shorts" in title.lower():
             continue
 
-        print(f"검사 대상 발견: {title} ({video_id})")
-
+        print(f"\n[분석 중] {title}")
+        
         try:
-            # 모듈 전체를 통해 클래스에 접근하여 AttributeError를 방지합니다.
-            api_class = youtube_transcript_api.YouTubeTranscriptApi
-            transcript = api_class.get_transcript(video_id, languages=['en', 'en-US'])
-            
+            # 자막 데이터를 가장 직접적인 방법으로 요청합니다.
+            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US'])
             full_text = " ".join([t['text'] for t in transcript])
             
-            # 텍스트가 너무 짧은 영상은 정보량이 부족하므로 건너뜁니다.
-            if len(full_text) < 300:
-                print("-> 정보량이 부족한 영상입니다. 다음 영상으로 넘어갑니다.")
-                continue
+            print(f"-> 자막 성공! (텍스트 길이: {len(full_text)}자)")
 
-            # 제미나이 2.0 모델을 사용한 핵심 요약 요청
+            # 제미나이 2.0 모델에게 경제 브리핑 요청
             response = client.models.generate_content(
                 model="gemini-2.0-flash",
                 contents=f"다음 블룸버그 뉴스 자막을 경제 전문가의 시각으로 한국어 요약해줘:\n\n{full_text}"
             )
             
-            print("\n" + "="*40)
-            print("블룸버그 뉴스 데일리 브리핑")
-            print(f"영상 제목: {title}")
-            print("="*40)
+            print("\n" + "★" * 30)
+            print("블룸버그 투데이 뉴스 리포트")
+            print(f"영상: {title}")
+            print("★" * 30)
             print(response.text)
-            return
+            return # 하나라도 성공하면 종료
 
         except Exception as e:
-            # 자막 데이터가 아직 생성되지 않은 경우 조용히 다음 영상을 시도합니다.
-            print(f"-> 자막 데이터를 가져올 수 없습니다. (사유: {str(e)[:50]}...)")
+            # 에러 내용을 더 구체적으로 출력하여 지웅님께 알려드립니다.
+            print(f"-> 건너뜀 사유: {str(e).split('.')[0]}")
             continue
 
-    print("\n최종 결과: 요약 가능한 충분한 텍스트 정보가 있는 영상을 찾지 못했습니다.")
+    print("\n최종 결과: 요약 가능한 유효 자막이 있는 영상을 찾지 못했습니다.")
 
 if __name__ == "__main__":
-    process_summary()
+    run()
